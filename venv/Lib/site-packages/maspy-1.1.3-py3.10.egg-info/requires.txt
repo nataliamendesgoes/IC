@@ -1,0 +1,12 @@
+pyteomics
+future
+numpy>=1.9.0
+scipy
+lxml
+matplotlib
+
+[dev]
+check-manifest
+
+[test]
+coverage

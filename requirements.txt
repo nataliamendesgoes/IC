@@ -1,8 +1,10 @@
 langchain
 langchain-community
 langchain-core
-langchain-chroma
+langchain-text-splitters  
+langchain-chroma          
+langchain-ollama          
 chromadb
 tree-sitter
 tree-sitter-languages
-tiktoken
+maspy-ml
