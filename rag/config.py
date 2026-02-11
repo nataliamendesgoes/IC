@@ -5,7 +5,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Onde estão os códigos fonte (Input)
-SOURCE_DIR = os.path.join(BASE_DIR, "codigos_maspy")
+SOURCE_DIR = os.path.join(BASE_DIR, "codigos_maspy/examples")
 
 # Onde o banco vetorial e os documentos pais serão salvos (Output)
 EMBEDDING_DIR = os.path.join(BASE_DIR, "embedding", "chroma_db")

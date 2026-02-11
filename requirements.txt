@@ -1,10 +1,16 @@
+# --- Core do Framework ---
 langchain
 langchain-community
 langchain-core
-langchain-text-splitters  
-langchain-chroma          
-langchain-ollama          
+langchain-text-splitters
+
+# --- Integrações Oficiais (Modernas) ---
+langchain-chroma
+langchain-ollama
+
+# --- Banco de Dados Vetorial ---
 chromadb
+
+# --- Análise de Código (Parser) ---
 tree-sitter
 tree-sitter-languages
-maspy-ml

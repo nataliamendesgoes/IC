@@ -1,83 +1,154 @@
 import os
 import shutil
-import pickle
+import sys
+from typing import List
 
-# --- IMPORTAÇÕES DE ARMAZENAMENTO E VECTORSTORE ---
-from langchain_chroma import Chroma
+# Adiciona raiz ao path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# --- IMPORTAÇÕES DE EMBEDDINGS ---
+# ===== Imports com Fallbacks =====
+try:
+    from langchain.schema import Document
+except Exception:
+    from langchain_core.documents import Document
+
+try:
+    from langchain_chroma import Chroma
+except Exception:
+    try:
+        from langchain_community.vectorstores import Chroma
+    except Exception:
+        try:
+            from langchain.vectorstores import Chroma
+        except Exception:
+            Chroma = None
+
+try:
+    from langchain_community.document_loaders.generic import GenericLoader
+    from langchain_community.document_loaders.parsers.language.language_parser import LanguageParser
+except Exception:
+    try:
+        from langchain.document_loaders.generic import GenericLoader
+        from langchain.document_loaders.parsers import LanguageParser
+    except Exception:
+        GenericLoader = None
+        LanguageParser = None
+
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
+except Exception:
+    try:
+        from langchain.text_splitter import RecursiveCharacterTextSplitter, Language
+    except Exception:
+        RecursiveCharacterTextSplitter = None
+        Language = None
+
 try:
     from langchain_ollama import OllamaEmbeddings
+except Exception:
+    try:
+        from langchain_community.embeddings import OllamaEmbeddings
+    except Exception:
+        try:
+            from langchain.embeddings import OllamaEmbeddings
+        except Exception:
+            OllamaEmbeddings = None
+
+# Importa as regras de domínio
+try:
+    from rag.domain import detectar_entidades_no_codigo
 except ImportError:
-    from langchain_community.embeddings import OllamaEmbeddings
+    # Fallback simples se domain.py não existir (mas crie ele!)
+    def detectar_entidades_no_codigo(x): return []
 
-# --- IMPORTAÇÕES DE TEXTO E SPLITTERS ---
-from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
-
-# --- IMPORTAÇÕES DE LOADERS ---
-from langchain_community.document_loaders.generic import GenericLoader
-from langchain_community.document_loaders.parsers import LanguageParser
-
-# --- CONFIGURAÇÃO LOCAL ---
-from config import SOURCE_DIR, EMBEDDING_DIR, DOCSTORE_DIR, EMBEDDING_MODEL, OLLAMA_BASE_URL
+from rag.config import (
+    SOURCE_DIR, EMBEDDING_DIR, EMBEDDING_MODEL, OLLAMA_BASE_URL
+)
 
 def main():
-    print(f"--- INICIANDO INGESTÃO (Modular) ---")
+    print(f"--- INGESTÃO INTELIGENTE MASPY ---")
     
-    # 1. Carregar arquivos
+    # Verificações rápidas de disponibilidade de dependências
+    missing = []
+    if GenericLoader is None or LanguageParser is None:
+        missing.append("GenericLoader/LanguageParser")
+    if Language is None:
+        missing.append("Language")
+    if RecursiveCharacterTextSplitter is None:
+        missing.append("RecursiveCharacterTextSplitter")
+    if Chroma is None:
+        missing.append("Chroma")
+    if OllamaEmbeddings is None:
+        missing.append("OllamaEmbeddings")
+
+    if missing:
+        print(f"❌ ERRO: Dependências ausentes: {', '.join(missing)}")
+        print("   Execute: pip install -r requirements.txt")
+        return
+    
+    # 1. Limpeza (Remove banco antigo para criar o novo com metadados)
+    if os.path.exists(EMBEDDING_DIR):
+        print("🗑️  Removendo banco antigo...")
+        try:
+            shutil.rmtree(EMBEDDING_DIR)
+        except Exception as e:
+            print(f"⚠️  Aviso: Não foi possível apagar pasta automaticamente ({e}). Apague manualmente se der erro.")
+
+    # 2. Carregar Código
+    print(f"📂 Lendo arquivos de: {SOURCE_DIR}")
     loader = GenericLoader.from_filesystem(
         SOURCE_DIR,
         glob="**/*",
         suffixes=[".py"],
         parser=LanguageParser(language=Language.PYTHON, parser_threshold=500),
     )
-    original_docs = loader.load()
-    print(f"Arquivos carregados: {len(original_docs)}")
+    docs = loader.load()
 
-    # 2. Limpeza
-    if os.path.exists(EMBEDDING_DIR):
-        shutil.rmtree(EMBEDDING_DIR)
-    if os.path.exists(DOCSTORE_DIR):
-        shutil.rmtree(DOCSTORE_DIR)
+    # 3. Splitter
+    splitter = RecursiveCharacterTextSplitter.from_language(
+        language=Language.PYTHON, 
+        chunk_size=800,       # Chunks maiores para pegar funções inteiras
+        chunk_overlap=100
+    )
+    chunks = splitter.split_documents(docs)
     
-    os.makedirs(EMBEDDING_DIR, exist_ok=True)
-    os.makedirs(DOCSTORE_DIR, exist_ok=True)
+    print(f"🧩 Processando {len(chunks)} trechos de código...")
 
-    # 3. Embeddings (Usando Ollama)
+    # 4. ENRIQUECIMENTO DE METADADOS
+    chunks_enriquecidos = []
+    stats = {}
+
+    for doc in chunks:
+        # Detecta entidades (Agent, Plan, Belief, etc)
+        entidades = detectar_entidades_no_codigo(doc.page_content)
+        
+        # Adiciona aos metadados (Join com vírgula para salvar no Chroma)
+        if entidades:
+            doc.metadata["maspy_entities"] = ",".join(entidades)
+            for ent in entidades:
+                stats[ent] = stats.get(ent, 0) + 1
+        
+        chunks_enriquecidos.append(doc)
+
+    print("\n📊 Estatísticas de Entidades Detectadas:")
+    for ent, count in stats.items():
+        print(f"   - {ent}: {count} chunks")
+
+    # 5. Salvar no Banco
+    print("\n💾 Salvando Embeddings...")
     embedding_model = OllamaEmbeddings(
         model=EMBEDDING_MODEL,
         base_url=OLLAMA_BASE_URL
     )
 
-    # 4. Splitters (Parent/Child)
-    child_splitter = RecursiveCharacterTextSplitter.from_language(
-        language=Language.PYTHON, chunk_size=400, chunk_overlap=50
-    )
-    parent_splitter = RecursiveCharacterTextSplitter.from_language(
-        language=Language.PYTHON, chunk_size=2000, chunk_overlap=0
-    )
-    
-    # Split documents
-    parent_docs = parent_splitter.split_documents(original_docs)
-    child_docs = child_splitter.split_documents(original_docs)
-
-    # 5. Vectorstore (Chroma)
-    vectorstore = Chroma(
-        collection_name="maspy_codes",
-        embedding_function=embedding_model,
-        persist_directory=EMBEDDING_DIR
+    Chroma.from_documents(
+        documents=chunks_enriquecidos,
+        embedding=embedding_model,
+        persist_directory=EMBEDDING_DIR,
+        collection_name="maspy_codes"
     )
     
-    print("Indexando documentos...")
-    # Add documents to vectorstore
-    vectorstore.add_documents(child_docs)
-    
-    # Save parent documents for reference
-    with open(os.path.join(DOCSTORE_DIR, "parent_docs.pkl"), "wb") as f:
-        pickle.dump(parent_docs, f)
-    
-    print("Sucesso!")
-
+    print(f"✅ Sucesso! Banco salvo em {EMBEDDING_DIR}")
 
 if __name__ == "__main__":
     main()
