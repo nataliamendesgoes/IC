@@ -16,6 +16,7 @@ OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 
 # Modelo de Geração (Chat): CodeLlama
 LLM_MODEL = "qwen2.5-coder:7b"
+REVISOR_MODEL = "llama3"
 
 # Modelo de Embedding (Busca): BGE-M3
 # Este modelo é MULTILÍNGUE, excelente para conectar perguntas em PT com código em EN.

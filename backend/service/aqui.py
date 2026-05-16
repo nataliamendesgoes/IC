@@ -1,32 +1,44 @@
-
 from maspy import *
-from random import choice
 
-class Armazem(Agent):
+class Semaforo(Agent):
     def __init__(self, agt_name):
         super().__init__(agt_name)
-        self.add(Belief("inventário", {"produto1": 10, "produto2": 5}))
+        self.add(Belief("estado", "vermelho"))
+        self.add(Goal("iniciar_ciclo"))
 
-    @pl(gain, Goal("verificar", Any), Belief("inventário"))
-    def verificar_stock(self, src, item):
-        stock = self.get(Belief("inventário")).values.get(item, 0)
-        if stock > 0:
-            self.print(f"Há {stock} unidades de {item} em stock")
-            self.send(src, achieve, Goal("responder", (item, "True")))
-        else:
-            self.print(f"Não há stock de {item}")
-            self.send(src, achieve, Goal("responder", (item, "False")))
+    @pl(gain, Goal("iniciar_ciclo"), Belief("estado", "vermelho"))
+    def iniciar_ciclo(self, src, *args):
+        self.print("Sinal Vermelho!")
+        self.send("CarroNorte_1", achieve, Goal("parar"))
+        self.send("CarroSul_1", achieve, Goal("parar"))
+        self.stop_cycle()
 
-class Cliente(Agent):
-    @pl(gain, Goal("iniciar", Any))
-    def iniciar(self, src, item):
-        self.print(f"Pedindo stock de {item}")
-        self.send("Armazem", achieve, Goal("verificar", item))
+class CarroNorte(Agent):
+    def __init__(self, agt_name):
+        super().__init__(agt_name)
+
+    @pl(gain, Goal("parar"))
+    def parar(self, src, *args):
+        self.print("Travando o veículo!")
+        self.stop_cycle()
+
+class CarroSul(Agent):
+    def __init__(self, agt_name):
+        super().__init__(agt_name)
+
+    @pl(gain, Goal("parar"))
+    def parar(self, src, *args):
+        self.print("Travando o veículo!")
+        self.stop_cycle()
 
 if __name__ == "__main__":
     Admin().console_settings(True)
-    armazem = Armazem("Arm")
-    cliente = Cliente("Cli")
-    Admin().connect_to([armazem, cliente], [Channel("Comunicacao")])
-    cliente.add(Goal("iniciar", "produto1"))
+    semaforo = Semaforo("Semaforo")
+    carro_norte = CarroNorte("CarroNorte")
+    carro_sul = CarroSul("CarroSul")
+
+    Admin().connect_to([semaforo, carro_norte, carro_sul], [Channel()])
+
+    semaforo.start_cycle()
+
     Admin().start_system()
