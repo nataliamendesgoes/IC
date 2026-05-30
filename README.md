@@ -1,4 +1,4 @@
-# 🤖 MASPy Code Generator
+# 🤖 MASPY Code Generator
 
 <div align="center">
 
