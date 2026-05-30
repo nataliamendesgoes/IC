@@ -299,10 +299,36 @@ class MaspySanitizer:
         self.code = '\n'.join(new_lines)
 
     def _ensure_clean_startup(self):
-        self.code = re.sub(r'Admin\(\)\.start_system\(\)', '', self.code)
-        if 'if __name__ == "__main__":' in self.code:
-            if 'console_settings' not in self.code:
-                self.code = self.code.replace('if __name__ == "__main__":', 'if __name__ == "__main__":\n    Admin().console_settings(True)')
+        # Remove qualquer Admin().start_system() existente
+        self.code = re.sub(r'\n?\s*Admin\(\)\.start_system\(\)', '', self.code)
+
+        if 'if __name__ == "__main__":' not in self.code:
+            return
+
+        # Garante console_settings logo após o if __name__
+        if 'console_settings' not in self.code:
+            self.code = self.code.replace(
+                'if __name__ == "__main__":',
+                'if __name__ == "__main__":\n    Admin().console_settings(True)'
+            )
+
+        # Encontra a última linha que pertence ao bloco __main__
+        # (indentada com 4 espaços e que seja código Python real)
+        lines = self.code.split('\n')
+        last_code_idx = -1
+        in_main = False
+        for i, line in enumerate(lines):
+            if 'if __name__ == "__main__":' in line:
+                in_main = True
+            if in_main and line.startswith('    ') and line.strip():
+                last_code_idx = i
+
+        if last_code_idx != -1:
+            lines.insert(last_code_idx + 1, '    Admin().start_system()')
+            # Remove tudo que vier depois do start_system (observações do LLM)
+            self.code = '\n'.join(lines[:last_code_idx + 2])
+            self.fixes.append("Admin().start_system() inserido como última linha do __main__")
+        else:
             self.code = self.code.strip() + '\n    Admin().start_system()'
 
     def _fix_admin_connect(self):
@@ -365,16 +391,33 @@ class MaspySanitizer:
 
 def extract_code_block(text: str) -> str:
     if not text: return ""
+
+    # Caso 1: bloco ```python ... ``` bem formado
     match = re.search(r'```python\s*(.*?)\s*```', text, re.DOTALL)
     if match: return match.group(1).strip()
-    
+
+    # Caso 2: bloco ``` ... ``` sem linguagem
+    match = re.search(r'```\s*(.*?)\s*```', text, re.DOTALL)
+    if match: return match.group(1).strip()
+
+    # Caso 3: sem delimitadores — encontra início do código
     lines = text.split('\n')
     start_idx = -1
     for i, line in enumerate(lines):
         if 'from maspy' in line or line.startswith('class ') or 'if __name__' in line:
             start_idx = i
             break
-    return '\n'.join(lines[start_idx:]).strip() if start_idx != -1 else text.strip()
+
+    if start_idx == -1:
+        return text.strip()
+
+    code = '\n'.join(lines[start_idx:]).strip()
+
+    # Corta tudo que vier após Admin().start_system() (observações do LLM)
+    if 'Admin().start_system()' in code:
+        code = code[:code.rfind('Admin().start_system()') + len('Admin().start_system()')]
+
+    return code.strip()
 
 def extract_main_only(text: str) -> str:
     code = extract_code_block(text)
