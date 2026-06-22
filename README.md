@@ -350,7 +350,7 @@ Os principais conceitos do MASPy usados na geração:
 ---
 
 
-## 👩‍💻 Autora
+<!-- ## 👩‍💻 Autora
 
 Desenvolvido por **Natalia Mendes Goes** como Iniciação Científica.
 
@@ -359,3 +359,4 @@ Desenvolvido por **Natalia Mendes Goes** como Iniciação Científica.
 [![GitHub](https://img.shields.io/badge/GitHub-nataliamendesgoes-181717?style=for-the-badge&logo=github)](https://github.com/nataliamendesgoes)
 
 </div>
+-->
