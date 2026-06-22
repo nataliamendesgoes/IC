@@ -512,8 +512,8 @@ def _spinner():
 
 def main():
     print("=" * 60)
-    print(f"🔧 MOTOR MASPY MULTI-AGENTE (V5.1 - PREVENÇÃO DE AMNÉSIA DE CONTEXTO)")
-    print("=" * 60)
+    #print(f"🔧 MOTOR MASPY MULTI-AGENTE (V5.1 - PREVENÇÃO DE AMNÉSIA DE CONTEXTO)")
+    #print("=" * 60)
 
     # 1. Instanciamos o LLM Gerador (Rápido, criativo)
     llm_gerador = ChatOllama(model=LLM_MODEL, base_url=OLLAMA_BASE_URL, temperature=0.1)
